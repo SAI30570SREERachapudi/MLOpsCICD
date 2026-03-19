@@ -1,0 +1,89 @@
+# cd_deploy.yml - Lab 5: Canary Deployment
+# Runs after CI pipeline succeeds on main
+
+name: ML Model CD - Canary Deployment
+
+on:
+  # ### YOUR CODE ###
+  # Trigger when 'ML Training CI Pipeline' workflow completes
+  # Event: workflow_run, types: [completed]
+  workflow_run:
+    workflows: ["ML Training CI Pipeline"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+
+  canary_deploy:
+    name: Deploy Canary (10% traffic)
+    runs-on: ubuntu-latest
+    # ### YOUR CODE ###
+    # Only run if CI workflow SUCCEEDED
+    # Check: github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success'
+
+    outputs:
+      canary_healthy: ${{ steps.health_check.outputs.healthy }}
+      model_version: ${{ steps.deploy.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install -r requirements.txt
+
+      - name: Deploy canary at 10% traffic
+        id: deploy
+        run: |
+          python -c "
+          version = 'v-abc1234'
+          print('[DEPLOY] Canary 10% - version:', version)
+          import os
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('version=' + version + chr(10))
+          "
+
+      - name: Wait for metrics to stabilize
+        # ### YOUR CODE ### - add a sleep command
+        run: |
+          echo 'Waiting for canary metrics...'
+          sleep 30
+
+      - name: Check canary health
+        id: health_check
+        run: |
+          python -c "
+          import random
+          random.seed(42)
+          accuracy = round(random.uniform(0.87, 0.94), 4)
+          latency  = round(random.uniform(45, 110), 1)
+          print('[METRICS] accuracy:', accuracy, 'latency:', latency, 'ms')
+          healthy = accuracy >= 0.85 and latency <= 200
+          print('[METRICS] healthy:', healthy)
+          import os
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('healthy=' + str(healthy).lower() + chr(10))
+          "
+
+  full_rollout:
+    name: Promote to 100% Traffic
+    runs-on: ubuntu-latest
+    needs: canary_deploy
+    # ### YOUR CODE ### - only if canary_healthy == 'true'
+    if: needs.canary_deploy.outputs.canary_healthy == 'true'
+    steps:
+      - run: |
+          echo '[PROMOTE] 100% traffic -> new model'
+          echo '[PROMOTE] Stage: Staging -> Production'
+
+  rollback:
+    name: Auto Rollback
+    runs-on: ubuntu-latest
+    needs: canary_deploy
+    # ### YOUR CODE ### - only if canary_healthy != 'true'
+    if: needs.canary_deploy.outputs.canary_healthy != 'true'
+    steps:
+      - run: |
+          echo '[ROLLBACK] Canary FAILED - reverting to stable model'
+          echo '[ALERT] On-call team notified'
