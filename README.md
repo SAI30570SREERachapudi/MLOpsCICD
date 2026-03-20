@@ -28,7 +28,7 @@ Scikit-learn
 NumPy
 
 
-#vHow to Run
+# How to Run
 
 Train model : python train.py
 
