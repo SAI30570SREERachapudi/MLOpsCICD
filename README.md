@@ -1,6 +1,6 @@
 # MLOps CI/CD Pipeline for Machine Learning
 
-This project demonstrates an end-to-end MLOps pipeline that automates the complete lifecycle of a machine learning model — from training to deployment and monitoring.
+This project demonstrates an end-to-end MLOps pipeline that automates the complete lifecycle of a machine learning model  from training to deployment and monitoring.
 
 # Project Overview
 
