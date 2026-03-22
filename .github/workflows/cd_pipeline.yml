@@ -1,0 +1,80 @@
+# ci_pipeline.yml - Lab 4: GitHub Actions CI for ML
+
+name: ML Training CI Pipeline
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'configs/**'
+      - 'data/**'
+      - 'train.py'
+      - 'validate.py'
+
+  schedule:
+    - cron: '0 2 * * *'
+
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.10'
+  MODEL_VERSION: ${{ github.sha }}
+
+jobs:
+
+  train:
+    name: Train Model
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run training
+        run: python train.py
+        env:
+          MODEL_VERSION: ${{ env.MODEL_VERSION }}
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-${{ github.sha }}
+          path: model.pkl
+          retention-days: 30
+
+  validate:
+    name: Validate Model
+    runs-on: ubuntu-latest
+    needs: train
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-${{ github.sha }}
+
+      - name: Run validation gates
+        run: python validate.py
+
+  register:
+    name: Register Model
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -r requirements.txt
+      - run: python -c "print('Registered: iris_classifier @ Staging')"
